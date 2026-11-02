@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package item;
+
+option go_package = "go_services/internal/itempb";
+
+service ItemService {
+  rpc GetItem(GetItemRequest) returns (Item);
+  rpc UpdateStock(UpdateStockRequest) returns (UpdateStockResponse);
+}
+
+message Item {
+  int64 id = 1;
+  string name = 2;
+  string category = 3;
+  int64 price_paise = 4;
+  int64 stock = 5;
+}
+
+message GetItemRequest {
+  int64 id = 1;
+}
+
+message UpdateStockRequest {
+  int64 item_id = 1;
+  // Positive adds stock (restock). Negative removes stock (an order).
+  int64 delta = 2;
+}
+
+message UpdateStockResponse {}
