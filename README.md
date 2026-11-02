@@ -47,11 +47,17 @@ curl -X PATCH localhost:8080/orders/<order_id>/status -d '{"status": "PROCESSED"
 
 The status path is `RECEIVED -> PROCESSED -> SHIPPED -> DELIVERED`. Skipping a step returns 409.
 
+Reaching `DELIVERED` publishes the order to the Kafka topic `orders.delivered`. To read it:
+
+```sh
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:19092 --topic orders.delivered --from-beginning
+```
+
 ## Left out to keep it simple
 
 - Orders with several dishes, and all-or-nothing reservations across them
 - `GET /orders/{id}`, `ListItems`, `CreateItem`
 - Retries, manual Kafka offset commits, and a sweeper for stuck orders
-- An `orders.delivered` event
 - Graceful shutdown, config from environment variables
 - Fake repositories for unit tests

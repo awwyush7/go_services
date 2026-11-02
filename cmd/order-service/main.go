@@ -47,6 +47,9 @@ func main() {
 		Items:  itempb.NewItemServiceClient(conn),
 		Kafka: &kafka.Writer{
 			Addr: kafka.TCP(kafkaBroker),
+			// Wait for Kafka to confirm each write. The default doesn't wait, so
+			// a failed write would still look successful.
+			RequiredAcks: kafka.RequireAll,
 			// The default is 1s, which would make every POST wait up to a second.
 			BatchTimeout: 10 * time.Millisecond,
 		},

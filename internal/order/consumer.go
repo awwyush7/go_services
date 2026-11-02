@@ -4,19 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 
 	"go_services/internal/itempb"
 )
 
+const consumerRetryDelay = 5 * time.Second
+
 // Consume reads orders from Kafka, one at a time, forever.
 func (s *Server) Consume(ctx context.Context, reader *kafka.Reader) {
 	for {
 		message, err := reader.ReadMessage(ctx)
 		if err != nil {
-			slog.Error("consumer stopped", "error", err)
-			return
+			// Keep trying: if this loop ended, the API would keep accepting
+			// orders that nothing processes.
+			slog.Error("kafka read failed, retrying", "error", err)
+			time.Sleep(consumerRetryDelay)
+			continue
 		}
 
 		var order Order

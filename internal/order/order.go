@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	TopicCreate = "orders.create"
+	TopicCreate    = "orders.create"
+	TopicDelivered = "orders.delivered"
 
 	StatusPending   = "PENDING"
 	StatusReceived  = "RECEIVED"
@@ -18,6 +19,13 @@ const (
 	StatusShipped   = "SHIPPED"
 	StatusDelivered = "DELIVERED"
 	StatusFailed    = "FAILED"
+)
+
+// Hard-coded on every order, to keep this project simple.
+const (
+	merchantID       = "M-1"
+	serviceID        = "S-1"
+	deliveryFeePaise = 3000
 )
 
 // previousStatus maps each status a client may set to the only status it may come from.
@@ -32,11 +40,14 @@ var orderNamespace = uuid.MustParse("6f3a1c52-8d47-4e0b-9a26-1b7e5d90c3f4")
 
 // Order is stored in DynamoDB, sent on Kafka and returned by the API.
 type Order struct {
-	OrderID    string `json:"order_id" dynamodbav:"order_id"`
-	ItemID     int64  `json:"item_id" dynamodbav:"item_id"`
-	Qty        int64  `json:"qty" dynamodbav:"qty"`
-	Status     string `json:"status" dynamodbav:"status"`
-	TotalPaise int64  `json:"total_paise" dynamodbav:"total_paise"`
+	OrderID          string `json:"order_id" dynamodbav:"order_id"`
+	ItemID           int64  `json:"item_id" dynamodbav:"item_id"`
+	Qty              int64  `json:"qty" dynamodbav:"qty"`
+	Status           string `json:"status" dynamodbav:"status"`
+	TotalPaise       int64  `json:"total_paise" dynamodbav:"total_paise"`
+	MerchantID       string `json:"merchant_id" dynamodbav:"merchant_id"`
+	ServiceID        string `json:"service_id" dynamodbav:"service_id"`
+	DeliveryFeePaise int64  `json:"delivery_fee_paise" dynamodbav:"delivery_fee_paise"`
 }
 
 // Server holds the connections the Order Service uses.

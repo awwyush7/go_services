@@ -54,7 +54,7 @@ services:
       timeout: 10s
       retries: 30
 
-  # Runs once to create the topic, then exits.
+  # Runs once to create the topics, then exits.
   kafka-init:
     image: docker.io/apache/kafka:3.9.1
     depends_on:
@@ -62,4 +62,7 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic orders.create --partitions 1 --replication-factor 1
+      - |
+        for topic in orders.create orders.delivered; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic "$$topic" --partitions 1 --replication-factor 1
+        done
