@@ -54,18 +54,39 @@ func (s *Server) saveIfNew(ctx context.Context, order Order) (bool, error) {
 	return err == nil, err
 }
 
-// setResult records the consumer's result on the order.
+// getOrder returns the stored order. A consistent read always sees the latest write.
+func (s *Server) getOrder(ctx context.Context, orderID string) (Order, error) {
+	output, err := s.Dynamo.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName:      aws.String(tableName),
+		Key:            orderKey(orderID),
+		ConsistentRead: aws.Bool(true),
+	})
+	if err != nil {
+		return Order{}, err
+	}
+
+	var order Order
+	err = attributevalue.UnmarshalMap(output.Item, &order)
+	return order, err
+}
+
+// setResult records the consumer's result, only if the order is still PENDING.
 func (s *Server) setResult(ctx context.Context, orderID, status string, totalPaise int64) error {
 	_, err := s.Dynamo.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName:                aws.String(tableName),
 		Key:                      orderKey(orderID),
 		UpdateExpression:         aws.String("SET #status = :status, total_paise = :total"),
+		ConditionExpression:      aws.String("#status = :pending"),
 		ExpressionAttributeNames: statusName,
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":status": &types.AttributeValueMemberS{Value: status},
-			":total":  &types.AttributeValueMemberN{Value: fmt.Sprint(totalPaise)},
+			":status":  &types.AttributeValueMemberS{Value: status},
+			":total":   &types.AttributeValueMemberN{Value: fmt.Sprint(totalPaise)},
+			":pending": &types.AttributeValueMemberS{Value: StatusPending},
 		},
 	})
+	if isConditionFailed(err) {
+		return nil // An earlier attempt already recorded the result.
+	}
 	return err
 }
 

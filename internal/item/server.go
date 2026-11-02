@@ -63,7 +63,7 @@ func (s *Server) GetItem(ctx context.Context, req *itempb.GetItemRequest) (*item
 	return item, nil
 }
 
-// UpdateStock adds delta to the stock. A negative delta takes stock for an order.
+// UpdateStock adds delta to the stock. A negative delta removes stock.
 func (s *Server) UpdateStock(ctx context.Context, req *itempb.UpdateStockRequest) (*itempb.UpdateStockResponse, error) {
 	// The WHERE clause is what stops stock going below 0, even with many
 	// requests at once, because MySQL runs this whole statement as one step.
@@ -86,4 +86,58 @@ func (s *Server) UpdateStock(ctx context.Context, req *itempb.UpdateStockRequest
 	s.Redis.Del(ctx, fmt.Sprintf("item:%d", req.GetItemId()))
 
 	return &itempb.UpdateStockResponse{}, nil
+}
+
+// ReserveStock takes the stock for an order, once. Calling it again with the same
+// order ID changes nothing and returns reserved = true, which makes retries safe.
+func (s *Server) ReserveStock(ctx context.Context, req *itempb.ReserveStockRequest) (*itempb.ReserveStockResponse, error) {
+	if req.GetOrderId() == "" || req.GetQty() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "order_id and a positive qty are required")
+	}
+
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "begin transaction: %v", err)
+	}
+	defer tx.Rollback() // Does nothing once Commit has succeeded.
+
+	// 1. Check and record the order in one step. IGNORE means a row that already
+	// exists is skipped, and that shows up as 0 rows affected.
+	result, err := tx.ExecContext(ctx,
+		`INSERT IGNORE INTO stock_reservations (order_id, item_id, qty) VALUES (?, ?, ?)`,
+		req.GetOrderId(), req.GetItemId(), req.GetQty())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "insert reservation: %v", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "insert reservation: %v", err)
+	}
+	if rows == 0 {
+		return &itempb.ReserveStockResponse{Reserved: true}, nil // Stock already taken.
+	}
+
+	// 2. Take the stock. If there isn't enough, returning here rolls back step 1.
+	result, err = tx.ExecContext(ctx,
+		`UPDATE inventory SET stock = stock - ? WHERE item_id = ? AND stock >= ?`,
+		req.GetQty(), req.GetItemId(), req.GetQty())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "take stock: %v", err)
+	}
+	rows, err = result.RowsAffected()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "take stock: %v", err)
+	}
+	if rows == 0 {
+		return &itempb.ReserveStockResponse{Reserved: false}, nil
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, status.Errorf(codes.Internal, "commit: %v", err)
+	}
+
+	// The cached copy now has the wrong stock, so remove it.
+	s.Redis.Del(ctx, fmt.Sprintf("item:%d", req.GetItemId()))
+
+	return &itempb.ReserveStockResponse{Reserved: true}, nil
 }

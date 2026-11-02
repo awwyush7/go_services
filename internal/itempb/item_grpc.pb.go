@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ItemService_GetItem_FullMethodName     = "/item.ItemService/GetItem"
-	ItemService_UpdateStock_FullMethodName = "/item.ItemService/UpdateStock"
+	ItemService_GetItem_FullMethodName      = "/item.ItemService/GetItem"
+	ItemService_UpdateStock_FullMethodName  = "/item.ItemService/UpdateStock"
+	ItemService_ReserveStock_FullMethodName = "/item.ItemService/ReserveStock"
 )
 
 // ItemServiceClient is the client API for ItemService service.
@@ -29,6 +30,7 @@ const (
 type ItemServiceClient interface {
 	GetItem(ctx context.Context, in *GetItemRequest, opts ...grpc.CallOption) (*Item, error)
 	UpdateStock(ctx context.Context, in *UpdateStockRequest, opts ...grpc.CallOption) (*UpdateStockResponse, error)
+	ReserveStock(ctx context.Context, in *ReserveStockRequest, opts ...grpc.CallOption) (*ReserveStockResponse, error)
 }
 
 type itemServiceClient struct {
@@ -59,12 +61,23 @@ func (c *itemServiceClient) UpdateStock(ctx context.Context, in *UpdateStockRequ
 	return out, nil
 }
 
+func (c *itemServiceClient) ReserveStock(ctx context.Context, in *ReserveStockRequest, opts ...grpc.CallOption) (*ReserveStockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReserveStockResponse)
+	err := c.cc.Invoke(ctx, ItemService_ReserveStock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ItemServiceServer is the server API for ItemService service.
 // All implementations must embed UnimplementedItemServiceServer
 // for forward compatibility.
 type ItemServiceServer interface {
 	GetItem(context.Context, *GetItemRequest) (*Item, error)
 	UpdateStock(context.Context, *UpdateStockRequest) (*UpdateStockResponse, error)
+	ReserveStock(context.Context, *ReserveStockRequest) (*ReserveStockResponse, error)
 	mustEmbedUnimplementedItemServiceServer()
 }
 
@@ -80,6 +93,9 @@ func (UnimplementedItemServiceServer) GetItem(context.Context, *GetItemRequest) 
 }
 func (UnimplementedItemServiceServer) UpdateStock(context.Context, *UpdateStockRequest) (*UpdateStockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateStock not implemented")
+}
+func (UnimplementedItemServiceServer) ReserveStock(context.Context, *ReserveStockRequest) (*ReserveStockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReserveStock not implemented")
 }
 func (UnimplementedItemServiceServer) mustEmbedUnimplementedItemServiceServer() {}
 func (UnimplementedItemServiceServer) testEmbeddedByValue()                     {}
@@ -138,6 +154,24 @@ func _ItemService_UpdateStock_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ItemService_ReserveStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReserveStockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ItemServiceServer).ReserveStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ItemService_ReserveStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ItemServiceServer).ReserveStock(ctx, req.(*ReserveStockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ItemService_ServiceDesc is the grpc.ServiceDesc for ItemService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +186,10 @@ var ItemService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateStock",
 			Handler:    _ItemService_UpdateStock_Handler,
+		},
+		{
+			MethodName: "ReserveStock",
+			Handler:    _ItemService_ReserveStock_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

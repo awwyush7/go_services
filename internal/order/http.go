@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -33,8 +34,9 @@ func (s *Server) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		MerchantID:       merchantID,
 		ServiceID:        serviceID,
 		DeliveryFeePaise: deliveryFeePaise,
+		OrderTime:        time.Now().UTC(),
 	}
-	if err := s.publish(r.Context(), TopicCreate, order); err != nil {
+	if err := s.publish(r.Context(), TopicCreate, order.OrderID, order); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -54,7 +56,7 @@ func (s *Server) UpdateOrderStatus(w http.ResponseWriter, r *http.Request) {
 
 	from, allowed := previousStatus[body.Status]
 	if !allowed {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "status must be PROCESSED, SHIPPED or DELIVERED"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "status must be PROCESSED, ON_THE_WAY or DELIVERED"})
 		return
 	}
 
@@ -70,7 +72,8 @@ func (s *Server) UpdateOrderStatus(w http.ResponseWriter, r *http.Request) {
 
 	if order.Status == StatusDelivered {
 		// The status has already changed, so a client disconnecting must not cancel this.
-		if err := s.publish(context.WithoutCancel(r.Context()), TopicDelivered, order); err != nil {
+		event := newOrderDeliveredEvent(order)
+		if err := s.publish(context.WithoutCancel(r.Context()), TopicDelivered, order.OrderID, event); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "status updated but event not published: " + err.Error()})
 			return
 		}
@@ -79,15 +82,15 @@ func (s *Server) UpdateOrderStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, order)
 }
 
-// publish sends the order to a Kafka topic as JSON, with order_id as the key.
-func (s *Server) publish(ctx context.Context, topic string, order Order) error {
-	value, err := json.Marshal(order)
+// publish sends a message to a Kafka topic as JSON. The key is the order ID.
+func (s *Server) publish(ctx context.Context, topic, orderID string, message any) error {
+	value, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
 	return s.Kafka.WriteMessages(ctx, kafka.Message{
 		Topic: topic,
-		Key:   []byte(order.OrderID),
+		Key:   []byte(orderID),
 		Value: value,
 	})
 }

@@ -12,3 +12,12 @@ CREATE TABLE inventory (
   PRIMARY KEY (item_id),
   CONSTRAINT chk_inventory_stock CHECK (stock >= 0)
 );
+
+-- A row here means the stock for this order has already been taken.
+CREATE TABLE stock_reservations (
+  order_id   VARCHAR(64) NOT NULL,
+  item_id    BIGINT      NOT NULL,
+  qty        BIGINT      NOT NULL,
+  created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (order_id)
+);
