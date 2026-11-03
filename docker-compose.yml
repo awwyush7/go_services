@@ -54,6 +54,18 @@ services:
       timeout: 10s
       retries: 30
 
+  # A web page for browsing topics and messages: http://localhost:8081
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.4.2
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+
   # Runs once to create the topics, then exits.
   kafka-init:
     image: docker.io/apache/kafka:3.9.1
